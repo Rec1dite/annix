@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # PYTHON_ARGCOMPLETE_OK
-from typing import TypedDict, Callable, Hashable, cast, Any
+from typing import TypedDict, Callable, Hashable, IO, cast, Any
 from textwrap import wrap
 from enum import Enum
 import argcomplete
@@ -17,43 +17,56 @@ import re
 
 #========================= CONFIGS =========================#
 
-env = os.environ.get
+config = {}
+try:
+    configPath = "/".join(os.path.realpath(__file__).split("/")[:-1] + ["config.json"])
+    with open(configPath, "r") as f: config = json.load(f)
+
+except Exception as e:
+    print(f"\033[93mConfig warning: Failed to load config:\n{e}\n\n\tDefaults will be used instead\n\033[0m")
+
+# By default, env vars start with "ANNIX_"
+def cfg(key: str, default: Any, env_prefix = True) -> Any:
+    return os.environ.get(("ANNIX_" if env_prefix else "") + key, config[key] if key in config else default)
+
 
 # The location of your an.nix file
-ANNIX_FILE = env("ANNIX_FILE", "/etc/nixos/an.nix")
+ANNIX_FILE = cfg("ANNIX_FILE", "/etc/nixos/an.nix", False)
 ANNIX_FILE_NAME = os.path.basename(ANNIX_FILE)
 
 # Command to rebuild the system
-REBUILD_COMMAND_DELIM = env("ANNIX_REBUILD_COMMAND_DELIM", None)
-REBUILD_COMMAND = env("ANNIX_REBUILD_uOMMAND", "nixos rebuild-switch").split(REBUILD_COMMAND_DELIM)
+REBUILD_COMMAND_DELIM = cfg("REBUILD_COMMAND_DELIM", None)
+REBUILD_COMMAND = cfg("REBUILD_COMMAND", "nixos rebuild-switch").split(REBUILD_COMMAND_DELIM)
 
 # Default token characters used to trick textwrap into correct ansi code handling
 # Must have len() == 1 and not be split by wrap() or contained in the text to be split
-TOKCHAR1 = "ඞ"
-TOKCHARN = "⍨"
+TOKCHAR1 = cfg("TOKCHAR1", "ඞ")
+TOKCHARN = cfg("TOKCHARN", "⍨")
 
 # Minimum terminal width for text wrapping
-MIN_WRAP_WIDTH = 10
+MIN_WRAP_WIDTH = cfg("MIN_WRAP_WIDTH", 10)
+
 
 #========================= UTILS =========================#
 
 #-------------------- I/O --------------------#
 def readf(path = ANNIX_FILE) -> list[str] | None:
     try:
-        with open(path, "r") as f:    return f.readlines()
+        with open(path, "r") as f: return f.readlines()
 
     except PermissionError: error("File", f"Permission denied - Cannot read {path}")
-    except Exception as e:  error("File", f"Failed to save:\n{e}")
-    finally:                return None
+    except Exception as e:  error("File", f"Failed to read:\n{e}")
+
+    return None
 
 def writef(lines: list[str], path = ANNIX_FILE) -> bool:
     try:
-        with open(path, "w") as f:    f.writelines(lines);
-        return True
+        with open(path, "w") as f:    f.writelines(lines); return True
 
     except PermissionError: error("File", f"Permission denied - Cannot write to {path}")
     except Exception as e:  error("File", f"Failed to save:\n{e}")
-    finally:                return False
+
+    return False
 
 
 def error(type: str, message: str, line: tuple[int, str] | None = None):
@@ -183,11 +196,11 @@ def parse_annix(lines: list[str] | None = None, suppress_warn = False) -> Parsed
                     case "invalidHash":         warn("Parse", f"Invalid hash found in {ANNIX_FILE_NAME}", (i+1, line), suppress_warn)
             
             case "hash":
-                if res['hash'][1] != -1:        warn("Parse", f"Multiple hashes found in {ANNIX_FILE_NAME}", (i+1, line), suppress_warn)
+                if res['hash'][1] != -1:        warn("Parse", f"Multiple hashes (#@#) found in {ANNIX_FILE_NAME}", (i+1, line), suppress_warn)
                 else:                           res['hash'] = (cast(str, content['hash']), i, cast(str, content['comment']))
 
             case "addhere":
-                if res['addhere'][1] != -1:     warn("Parse", f"Multiple addhere markers found in {ANNIX_FILE_NAME}", (i+1, line), suppress_warn)
+                if res['addhere'][1] != -1:     warn("Parse", f"Multiple addhere markers (#@+ / #@+^) found in {ANNIX_FILE_NAME}", (i+1, line), suppress_warn)
                 else:                           res['addhere'] = (cast(bool, content['above']), i)
                 continue
 
@@ -246,7 +259,7 @@ def update_hash() -> bool:
 
     if prev_hash == new_hash: return False
 
-    if prev_hash[0] == -1:  lines.insert(0, f"#@# {new_hash}\n")    # No hash found, add new
+    if prev_hash != "" and prev_hash[0] == -1:  lines.insert(0, f"#@# {new_hash}\n")    # No hash found, add new
     else: lines[hashline] = f"#@# {new_hash}{comment}\n"                     # Update existing hash
 
     writef(lines)
@@ -260,9 +273,10 @@ def needs_rebuild(parsed: Parsed | None = None):
     if parsed is None: return
     return parsed["hash"][0] == compute_hash(parsed)
 
-def nixos_rebuild():    print("\033[93mRebuilding system...\033[0m")
+def nixos_rebuild():
+    print("\033[93mRebuilding system...\033[0m")
     # proc = subprocess.Popen(REBUILD_COMMAND, stdout=subprocess.PIPE)
-    # for c in iter(lambda: proc.stdout.read(1), b""):
+    # for c in iter(lambda: cast(IO[bytes], proc.stdout).read(1), b""):
     #     sys.stdout.buffer.write(c)
 
     # subprocess.run(REBUILD_COMMAND)
@@ -405,12 +419,12 @@ def annix_ls(as_json = False):
 
     if pkgs:
         print("\n\033[92mActive\033[0m packages:")
-        for pkg in pkgs: print(f"    {pkg}")
+        for (pkg, line_no, comment) in pkgs: print(f"    {pkg}")
     else: print("\nNo \033[92mactive\033[0m packages")
 
     if disabled:
         print("\n\033[95mDisabled\033[0m packages:")
-        for pkg in disabled: print(f"    {pkg}")
+        for (pkg, line_no, comment) in disabled: print(f"    {pkg}")
     else: print("\nNo \033[95mdisabled\033[0m packages")
 
 def annix_clean():
@@ -477,7 +491,8 @@ def main():
     parser_rm.add_argument("-a", "--all", action="store_true", help="Remove all instances of packages")
     parser_rm.add_argument("-s", "--skip-rebuild", action="store_true", help="Skip system rebuild")
 
-    subparsers.add_parser("ls", help="List installed packages")
+    parser_ls = subparsers.add_parser("ls", help="List installed packages")
+    parser_ls.add_argument("--json", action="store_true", help="Print as JSON")
 
     subparsers.add_parser("clean", help=f"Remove disabled packages from {ANNIX_FILE_NAME}")
 
@@ -495,7 +510,7 @@ def main():
         case "search":          annix_search(" ".join(args.query))
         case "add":             annix_add(args.packages, args.skip_rebuild)
         case "rm":              annix_rm(args.packages, PkgMask.ALL, args.delete, args.all, args.skip_rebuild)
-        case "ls":              annix_ls()
+        case "ls":              annix_ls(args.json)
         case "clean":           annix_clean()
         case "save":            annix_save(args.name)
         case "help":            annix_help(parser)

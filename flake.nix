@@ -13,7 +13,7 @@
       in
       rec {
         packages = rec {
-          annix = import ./. { inherit pkgs; };
+          annix = import ./default.nix { inherit pkgs; };
           default = annix;
         };
 

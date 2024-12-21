@@ -37,33 +37,52 @@ nix run github:rec1dite/annix -- help
 ```nix
 # Basic an.nix template
 #@# A_HASH_WILL_BE_AUTO_GENERATED_HERE
-# Lines ending with "#@" are non-package code lines
-{ pkgs, ... }: with pkgs; [ #@
-  (annix ...) #@
+# Lines ending with "#@" are 'code' lines
+{ pkgs, upkgs, ... }: { environment.systemPackages = with pkgs; [ #@
+  (import (fetchFromGitHub {                                      #@
+    owner = "rec1dite"; repo = "annix"; rev = "master";           #@
+    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; #@
+  }) { inherit pkgs; configs = { ANNIX_FILE = ./an.nix; }; })     #@
 
   # Unmarked lines represent active packages
   alacritty
   bottom
   cava
 
+  # Disabled packages are marked with "#-"
+  #- dmenu
+
   # New packages will be appended after the "#@+" marker
   #@+
-] #@
+]; } #@
 ```
 
-2. **Register `an.nix`** with your dotfiles source control
+2. **Import the `an.nix` file** as a module in your `configuration.nix`
+```nix
+{ lib, pkgs, ... }@inputs:
+{
+  imports = [ ./an.nix /* ... other modules ... */ ];
+
+  # ...
+}
+```
+
+3. **Register `an.nix`** with your dotfiles source control
 ```bash
 $ git add an.nix
 ```
 
-3. **Import `an.nix`** in your `configuration.nix`
-```nix
-environment.systemPackages = (import ./an.nix nixpkgs) ++ (with pkgs; [ /* non-annix-managed packages here */ ]);
-```
-
-4. **Apply the changes**
+4. **Update the current commit hash** by running the following, then copying the expected hash to the `sha256-...` field above
 ```bash
 $ sudo nixos-rebuild switch
+```
+
+5. **Apply the changes** by rerunning the `sudo nixos-rebuild switch` command
+
+6. **Use `annix`** to manage your packages
+```bash
+$ annix add firefox
+$ annix ls
 ```
 
 ---
@@ -89,6 +108,7 @@ You may alter the file directly and even use it as a regular `.nix` file provide
 ## TODO
 - [ ] `annix sort` -> Sorts the configuration file entries according to various criteria
 - [ ] `annix try` -> Install temporarily; removes after a predefined duration
+- [ ] Indent at same level as `#@+` marker when adding new packages
 - [ ] Tagged `#@+` markers for different package categories
 - [ ] Neater line parsing with regex and capture groups
 - [ ] Profile switching between different an.nix files

@@ -1,9 +1,10 @@
 # nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-24.05";
 {
   pkgs ? import <nixpkgs> {},
-  annixFile ? "/etc/nixos/an.nix",
-  ...
+  configs ? {},
+  ... 
 }:
+
 pkgs.stdenv.mkDerivation {
 
   name = "annix";
@@ -12,11 +13,13 @@ pkgs.stdenv.mkDerivation {
   nativeBuildInputs = [ pkgs.installShellFiles ];
   propagatedBuildInputs = import ./deps.nix { inherit pkgs; };
 
-  ANNIX_FILE = annixFile;
-
   dontUnpack = true;
-  installPhase = ''
+  installPhase = let
+    configFile = pkgs.writeText "config.json" (builtins.toJSON configs);
+  in ''
     install -Dm755 ${./annix.py} $out/bin/annix
+    install -Dm644 ${configFile} $out/bin/config.json
+
     installShellCompletion --bash --name annix.bash <(register-python-argcomplete annix)
     installShellCompletion --zsh  --name annix.zsh <(register-python-argcomplete annix)
   '';
