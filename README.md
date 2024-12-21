@@ -74,15 +74,15 @@ The `an.nix` file uses a few special markers and symbols to control how `annix` 
 All `annix` state is maintained in this file, so everything is fully transparent.
 You may alter the file directly and even use it as a regular `.nix` file provided the following conventions are observed:
 
-- **`<package>`**: Unmarked and uncommented lines in `an.nix` are names of **installed packages**. These are standard package names from [nixpkgs](https://search.nixos.org/packages).
+- **`<package>`**: Unmarked and uncommented lines in `an.nix` are interpreted as names of **installed packages**. These are standard package names from [nixpkgs](https://search.nixos.org/packages).
 
 - **`#@# <hash>`**: This is the md5 **hash of the package list and code** in `an.nix` - it is calculated and updated by `annix` after each rebuild to mark the current state of the system. It should not be manually altered.
   
-- **`#@`**: Lines ending with `#@` indicate arbitrary **Nix code lines**. You can add arbitrary Nix code to the `an.nix` file, provided all non-package and non-comment lines end with this marker.
+- **`#@`**: Lines ending with `#@` indicate **Nix code lines**. You can add arbitrary Nix code to the `an.nix` file, provided all non-package and non-comment lines end with this marker.
 
-- **`#- `**: A line starting with `#- ` marks a **disabled package**. `annix rm` 'disables' packages by default instead of deleting them from the file, such that they are still available for future reference. They can be manually removed or wiped via `annix clean`.
+- **`#-`**: A line starting with `#-` marks a **disabled package**. `annix rm` 'disables' packages by default instead of deleting them from the file, such that they are still available for future reference. They can be manually removed or wiped via `annix clean`.
 
-- **`#@+`**/**`#@+^`**: Lines ending with `#@+` are **ignored by `annix`** and can be used for notes or documentation within `an.nix`.
+- **`#@+`**/**`#@+^`**: A single line in the `an.nix` file should contain an **addhere marker**. This determines the line at which new packages are appended after `annix add`. The `^` variant prepends packages above the marker.
 
 - **`#`**: Any line starting with a single `#` are treated as **comments** and ignored by `annix`. These can be used freely for notes or documentation within `an.nix`. They may also appear at the end of active and disabled package lines.
 
