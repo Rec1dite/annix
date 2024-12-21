@@ -38,11 +38,22 @@ MIN_WRAP_WIDTH = 10
 #========================= UTILS =========================#
 
 #-------------------- I/O --------------------#
-def readf() -> list[str]:
-    with open(ANNIX_FILE, "r") as f:    return f.readlines()
+def readf(path = ANNIX_FILE) -> list[str] | None:
+    try:
+        with open(path, "r") as f:    return f.readlines()
 
-def writef(lines: list[str]):
-    with open(ANNIX_FILE, "w") as f:    f.writelines(lines)
+    except PermissionError: error("File", f"Permission denied - Cannot read {path}")
+    except Exception as e:  error("File", f"Failed to save:\n{e}")
+    finally:                return None
+
+def writef(lines: list[str], path = ANNIX_FILE) -> bool:
+    try:
+        with open(path, "w") as f:    f.writelines(lines);
+        return True
+
+    except PermissionError: error("File", f"Permission denied - Cannot write to {path}")
+    except Exception as e:  error("File", f"Failed to save:\n{e}")
+    finally:                return False
 
 
 def error(type: str, message: str, line: tuple[int, str] | None = None):
@@ -152,8 +163,9 @@ def parse_line(line: str) -> tuple[str, dict[str, object]]:
     return ("pkg", { 'pkg': pkg, 'comment': comment })
 
 # Parse an.nix and extract important features
-def parse_annix(lines: list[str] | None = None, suppress_warn = False) -> Parsed:
+def parse_annix(lines: list[str] | None = None, suppress_warn = False) -> Parsed | None:
     if lines is None: lines = readf()
+    if lines is None: return None
 
     res: Parsed = { 'hash': ("", -1, ""), 'addhere': (False, -1), 'pkgs': [], 'disabled': [], 'code': [] }
 
@@ -227,8 +239,7 @@ def compute_hash(parsed: Parsed) -> str:
 # Compute + write new hash to an.nix
 # Returns True if hash was updated
 def update_hash() -> bool:
-    lines = readf()
-    parsed = parse_annix(lines)
+    if (lines := readf()) is None or (parsed := parse_annix(lines)) is None: return False
 
     (prev_hash, hashline, comment) = parsed["hash"]
     new_hash = compute_hash(parsed)
@@ -246,6 +257,7 @@ def update_hash() -> bool:
 #-------------------- REBUILD --------------------#
 def needs_rebuild(parsed: Parsed | None = None):
     if parsed is None: parsed = parse_annix()
+    if parsed is None: return
     return parsed["hash"][0] == compute_hash(parsed)
 
 def nixos_rebuild():    print("\033[93mRebuilding system...\033[0m")
@@ -291,8 +303,7 @@ def annix_add(pkgs: list[str], skip_rebuild=False):
     pkgs = list(set(pkgs))
 
     #----- Get existing packages ----#
-    lines = readf()
-    parsed = parse_annix(lines)
+    if (lines := readf()) is None or (parsed := parse_annix(lines)) is None: return
 
     #----- Determine insertion point ----#
     # Look for #@+ marker
@@ -338,8 +349,8 @@ def annix_add(pkgs: list[str], skip_rebuild=False):
 
     if modified:
         writef(lines)
-        if existing: print(f"{{ {', '.join([f"\033[94m{p}\033[0m" for p in sorted(list(existing))])} }} unchanged - already installed")
-        if reenabled: print(f"{{ {', '.join([f"\033[94m{p}\033[0m" for p in sorted(list(reenabled))])} }} re-enabled")
+        if existing: print("{ " + ', '.join([f'\033[94m{p}\033[0m' for p in sorted(list(existing))]) + "} unchanged - already installed")
+        if reenabled: print("{ " + ', '.join([f'\033[94m{p}\033[0m' for p in sorted(list(reenabled))]) + " } re-enabled")
 
         if not skip_rebuild and update_hash(): nixos_rebuild()
     else:
@@ -350,8 +361,8 @@ def annix_rm(pkgs: list[str], mask: PkgMask = PkgMask.ALL, delete = False, all_i
     if not pkgs: return
     pkgs = list(set(pkgs))
 
-    lines = readf()
-    parsed = parse_annix(lines)
+    if (lines := readf()) is None or (parsed := parse_annix(lines)) is None: return
+
     modified = False
 
     deadpool = []
@@ -383,7 +394,7 @@ def annix_rm(pkgs: list[str], mask: PkgMask = PkgMask.ALL, delete = False, all_i
 
 
 def annix_ls(as_json = False):
-    parsed = parse_annix()
+    if (parsed := parse_annix()) is None: return
     pkgs, disabled = parsed['pkgs'], parsed['disabled']
 
     if not pkgs and not disabled: print(f"No packages found in \033[93m{ANNIX_FILE}\033[0m"); return
@@ -403,7 +414,8 @@ def annix_ls(as_json = False):
     else: print("\nNo \033[95mdisabled\033[0m packages")
 
 def annix_clean():
-    disabled = [p for p, _, _ in parse_annix(suppress_warn=True)["disabled"]]
+    if (parsed := parse_annix(suppress_warn=True)) is None: return
+    disabled = [p for p, _, _ in parsed]
     annix_rm(disabled, PkgMask.DISABLED, True, True, True)
 
 
@@ -419,17 +431,8 @@ def annix_save(name: str):
         print(f"'{save_file}' already exists, overwrite? [y/N] ")
         if input().lower() != "y": return
 
-    try:
-        with open(save_file, "w") as f:
-            f.writelines(readf())
+    if (content := readf()) is not None and writef(content, save_file):
         print(f"Configuration saved as an_{name}.nix")
-
-    except PermissionError:
-        error("File", f"Permission denied - Cannot write to {save_file}")
-
-    except Exception as e:
-        error("File", f"Failed to save configuration:\n{e}")
-
 
 def annix_help(parser: argparse.ArgumentParser):
     c_pre = "\033[93m"
