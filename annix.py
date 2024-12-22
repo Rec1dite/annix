@@ -273,24 +273,48 @@ def needs_rebuild(parsed: Parsed | None = None) -> bool:
     if parsed is None: return False
     return parsed["hash"][0] != compute_hash(parsed)
 
-def nixos_rebuild(force=False) -> bool:
+# Returns True if changes were made
+def nixos_rebuild(force=False, print_progress=True) -> bool:
     if force or needs_rebuild():
         print("\033[93mRebuilding system...\033[0m")
-        # proc = subprocess.Popen(REBUILD_COMMAND, stdout=subprocess.PIPE)
-        # for c in iter(lambda: cast(IO[bytes], proc.stdout).read(1), b""):
-        #     sys.stdout.buffer.write(c)
+        
+        try:
+            proc = subprocess.Popen(
+                ['sudo', 'nixos-rebuild', 'switch'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
 
-        # subprocess.run(REBUILD_COMMAND)
+            if proc.stdout is not None and proc.stderr is not None:
+                if print_progress: # Stream output
+                    for line in iter(proc.stdout.readline, ''):
+                        sys.stdout.write(line)
+                    for line in iter(proc.stderr.readline, ''):
+                        sys.stderr.write(line)
 
-    else: print("\033[92mSystem up-to-date\033[0m")
+                    proc.stdout.close()
+                    proc.stderr.close()
 
-    return update_hash()
+                proc.wait()
+
+                if proc.returncode != 0:
+                    error("Rebuild", f"Error during rebuild. Exit code: {proc.returncode}")
+
+        except PermissionError:
+            error("Permission", "You do not have sufficient permissions to run 'sudo nixos-rebuild switch'.")
+
+        return update_hash()
+
+    else:
+        print("\033[92mSystem up-to-date\033[0m")
+        return False
 
 
 #========================= COMMANDS =========================#
 
-def annix_sync(force=False):
-    nixos_rebuild(force)
+def annix_sync(force=False, quiet=False):
+    nixos_rebuild(force, not quiet)
 
 def annix_search(query):
     if not query: return
@@ -372,7 +396,7 @@ def annix_add(pkgs: list[str], skip_rebuild=False):
 
         if not skip_rebuild: nixos_rebuild()
     else:
-        print("\033[95mNo changes made - The specified packages were already installed\033[0m")
+        print("\033[95mNo changes made - The specified package/s were already installed\033[0m")
 
 
 def annix_rm(pkgs: list[str], mask: PkgMask = PkgMask.ALL, delete = False, all_instances=False, skip_rebuild=False):
@@ -408,7 +432,7 @@ def annix_rm(pkgs: list[str], mask: PkgMask = PkgMask.ALL, delete = False, all_i
         writef(lines)
         if not skip_rebuild: nixos_rebuild()
     else:
-        print("\033[95mNo changes made - The specified packages were not installed\033[0m")
+        print("\033[95mNo changes made - The specified package/s were not installed\033[0m")
 
 
 def annix_ls(as_json = False):
@@ -482,6 +506,7 @@ def main():
 
     parser_sync = subparsers.add_parser("sync", help="Update system packages to match an.nix")
     parser_sync.add_argument("-f", "--force", action="store_true", help="Force")
+    parser_sync.add_argument("-q", "--quiet", action="store_true", help="Quiet mode")
 
     parser_search = subparsers.add_parser("search", help="Search for packages in nixpkgs")
     parser_search.add_argument("query", nargs="+", help="Query string for searching packages")
@@ -511,7 +536,7 @@ def main():
 
     #---------- Handle commands ----------#
     match args.command:
-        case "sync":            annix_sync(args.force)
+        case "sync":            annix_sync(args.force, args.quiet)
         case "search":          annix_search(" ".join(args.query))
         case "add":             annix_add(args.packages, args.skip_rebuild)
         case "rm":              annix_rm(args.packages, PkgMask.ALL, args.delete, args.all, args.skip_rebuild)
