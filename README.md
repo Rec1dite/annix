@@ -38,11 +38,11 @@ nix run github:rec1dite/annix -- help
 # Basic an.nix template
 #@# A_HASH_WILL_BE_AUTO_GENERATED_HERE
 # Lines ending with "#@" are 'code' lines
-{ pkgs, upkgs, ... }: { environment.systemPackages = with pkgs; [ #@
-  (import (fetchFromGitHub {                                      #@
-    owner = "rec1dite"; repo = "annix"; rev = "master";           #@
-    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; #@
-  }) { inherit pkgs; configs = { ANNIX_FILE = ./an.nix; }; })     #@
+{ pkgs, upkgs, ... }: { environment.systemPackages = with pkgs; [      #@
+  (import (fetchFromGitHub {                                           #@
+    owner = "rec1dite"; repo = "annix"; rev = "master";                #@
+    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";      #@
+  }) { inherit pkgs; configs = { ANNIX_FILE = "/path/to/an.nix"; }; }) #@
 
   # Unmarked lines represent active packages
   alacritty
@@ -77,9 +77,11 @@ $ git add an.nix
 $ sudo nixos-rebuild switch
 ```
 
-5. **Apply the changes** by rerunning the `sudo nixos-rebuild switch` command
+5. **Override the `ANNIX_FILE` config** at the top of the `an.nix` file if it is different from the default `/etc/nixos/an.nix`.
 
-6. **Use `annix`** to manage your packages
+6. **Apply the changes** by rerunning the `sudo nixos-rebuild switch` command
+
+7. **Use `annix`** to manage your packages
 ```bash
 $ annix add firefox
 $ annix ls
@@ -113,6 +115,7 @@ You may alter the file directly and even use it as a regular `.nix` file provide
 - [ ] Neater line parsing with regex and capture groups
 - [ ] Profile switching between different an.nix files
 - [ ] Add multiline code block markers
+- [ ] Switch to pager for long output
 - [ ] Package version handling
 - [ ] Package name validation
 - [ ] Better tab completion

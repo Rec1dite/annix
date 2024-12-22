@@ -259,8 +259,8 @@ def update_hash() -> bool:
 
     if prev_hash == new_hash: return False
 
-    if prev_hash != "" and prev_hash[0] == -1:  lines.insert(0, f"#@# {new_hash}\n")    # No hash found, add new
-    else: lines[hashline] = f"#@# {new_hash}{comment}\n"                     # Update existing hash
+    if hashline == -1:  lines.insert(0, f"#@# {new_hash}\n")            # No hash found, add new
+    else:               lines[hashline] = f"#@# {new_hash}{comment}\n"  # Update existing hash
 
     writef(lines)
 
@@ -273,8 +273,9 @@ def needs_rebuild(parsed: Parsed | None = None):
     if parsed is None: return
     return parsed["hash"][0] == compute_hash(parsed)
 
-def nixos_rebuild():
+def nixos_rebuild() -> bool:
     print("\033[93mRebuilding system...\033[0m")
+    return True
     # proc = subprocess.Popen(REBUILD_COMMAND, stdout=subprocess.PIPE)
     # for c in iter(lambda: cast(IO[bytes], proc.stdout).read(1), b""):
     #     sys.stdout.buffer.write(c)
@@ -285,7 +286,8 @@ def nixos_rebuild():
 #========================= COMMANDS =========================#
 
 def annix_sync(force=False):
-    if force or needs_rebuild():    nixos_rebuild()
+    if force or needs_rebuild():    
+        if nixos_rebuild(): update_hash()
     else:                           print("System up-to-date")
 
 def annix_search(query):
