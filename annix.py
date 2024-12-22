@@ -268,27 +268,29 @@ def update_hash() -> bool:
 
 
 #-------------------- REBUILD --------------------#
-def needs_rebuild(parsed: Parsed | None = None):
+def needs_rebuild(parsed: Parsed | None = None) -> bool:
     if parsed is None: parsed = parse_annix()
-    if parsed is None: return
-    return parsed["hash"][0] == compute_hash(parsed)
+    if parsed is None: return False
+    return parsed["hash"][0] != compute_hash(parsed)
 
-def nixos_rebuild() -> bool:
-    print("\033[93mRebuilding system...\033[0m")
-    return True
-    # proc = subprocess.Popen(REBUILD_COMMAND, stdout=subprocess.PIPE)
-    # for c in iter(lambda: cast(IO[bytes], proc.stdout).read(1), b""):
-    #     sys.stdout.buffer.write(c)
+def nixos_rebuild(force=False) -> bool:
+    if force or needs_rebuild():
+        print("\033[93mRebuilding system...\033[0m")
+        # proc = subprocess.Popen(REBUILD_COMMAND, stdout=subprocess.PIPE)
+        # for c in iter(lambda: cast(IO[bytes], proc.stdout).read(1), b""):
+        #     sys.stdout.buffer.write(c)
 
-    # subprocess.run(REBUILD_COMMAND)
+        # subprocess.run(REBUILD_COMMAND)
+
+    else: print("\033[92mSystem up-to-date\033[0m")
+
+    return update_hash()
 
 
 #========================= COMMANDS =========================#
 
 def annix_sync(force=False):
-    if force or needs_rebuild():    
-        if nixos_rebuild(): update_hash()
-    else:                           print("System up-to-date")
+    nixos_rebuild(force)
 
 def annix_search(query):
     if not query: return
@@ -368,7 +370,7 @@ def annix_add(pkgs: list[str], skip_rebuild=False):
         if existing: print("{ " + ', '.join([f'\033[94m{p}\033[0m' for p in sorted(list(existing))]) + "} unchanged - already installed")
         if reenabled: print("{ " + ', '.join([f'\033[94m{p}\033[0m' for p in sorted(list(reenabled))]) + " } re-enabled")
 
-        if not skip_rebuild and update_hash(): nixos_rebuild()
+        if not skip_rebuild: nixos_rebuild()
     else:
         print("\033[95mNo changes made - The specified packages were already installed\033[0m")
 
@@ -404,7 +406,7 @@ def annix_rm(pkgs: list[str], mask: PkgMask = PkgMask.ALL, delete = False, all_i
 
     if modified:
         writef(lines)
-        if not skip_rebuild and update_hash(): nixos_rebuild()
+        if not skip_rebuild: nixos_rebuild()
     else:
         print("\033[95mNo changes made - The specified packages were not installed\033[0m")
 
@@ -479,6 +481,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     parser_sync = subparsers.add_parser("sync", help="Update system packages to match an.nix")
+    parser_sync.add_argument("-f", "--force", action="store_true", help="Force")
 
     parser_search = subparsers.add_parser("search", help="Search for packages in nixpkgs")
     parser_search.add_argument("query", nargs="+", help="Query string for searching packages")
@@ -508,7 +511,7 @@ def main():
 
     #---------- Handle commands ----------#
     match args.command:
-        case "sync":            annix_sync(True)
+        case "sync":            annix_sync(args.force)
         case "search":          annix_search(" ".join(args.query))
         case "add":             annix_add(args.packages, args.skip_rebuild)
         case "rm":              annix_rm(args.packages, PkgMask.ALL, args.delete, args.all, args.skip_rebuild)
