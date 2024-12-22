@@ -431,7 +431,7 @@ def annix_ls(as_json = False):
 
 def annix_clean():
     if (parsed := parse_annix(suppress_warn=True)) is None: return
-    disabled = [p for p, _, _ in parsed]
+    disabled = [p for p, _, _ in parsed["disabled"]]
     annix_rm(disabled, PkgMask.DISABLED, True, True, True)
 
 
@@ -489,8 +489,8 @@ def main():
 
     parser_rm = subparsers.add_parser("rm", help="Remove packages")
     parser_rm.add_argument("packages", nargs="+", help="Packages to remove")
-    parser_rm.add_argument("-d", "--delete", action="store_true", help="Delete packages")
-    parser_rm.add_argument("-a", "--all", action="store_true", help="Remove all instances of packages")
+    parser_rm.add_argument("-d", "--delete", action="store_true", help="Delete entry instead of disabling")
+    parser_rm.add_argument("-a", "--all", action="store_true", help="Remove all instances if there's duplicates")
     parser_rm.add_argument("-s", "--skip-rebuild", action="store_true", help="Skip system rebuild")
 
     parser_ls = subparsers.add_parser("ls", help="List installed packages")
