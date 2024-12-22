@@ -36,7 +36,7 @@ ANNIX_FILE_NAME = os.path.basename(ANNIX_FILE)
 
 # Command to rebuild the system
 REBUILD_COMMAND_DELIM = cfg("REBUILD_COMMAND_DELIM", None)
-REBUILD_COMMAND = cfg("REBUILD_COMMAND", "nixos rebuild-switch").split(REBUILD_COMMAND_DELIM)
+REBUILD_COMMAND = cfg("REBUILD_COMMAND", "sudo nixos-rebuild switch").split(REBUILD_COMMAND_DELIM)
 
 # Default token characters used to trick textwrap into correct ansi code handling
 # Must have len() == 1 and not be split by wrap() or contained in the text to be split
@@ -280,7 +280,7 @@ def nixos_rebuild(force=False, print_progress=True) -> bool:
         
         try:
             proc = subprocess.Popen(
-                ['sudo', 'nixos-rebuild', 'switch'],
+                REBUILD_COMMAND,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
